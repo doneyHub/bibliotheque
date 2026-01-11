@@ -1,0 +1,214 @@
+CREATE DATABASE IF NOT EXISTS bibliotheque;
+USE bibliotheque;
+
+CREATE TABLE IF NOT EXISTS utilisateurs (
+    id_utilisateur INT AUTO_INCREMENT PRIMARY KEY,
+    nom VARCHAR(100),
+    prenom VARCHAR(100),
+    matricule VARCHAR(50) UNIQUE,
+    type_utilisateur VARCHAR(20) -- 'ETUDIANT' ou 'ENSEIGNANT'
+);
+
+CREATE TABLE IF NOT EXISTS livres (
+    id_livre INT AUTO_INCREMENT PRIMARY KEY,
+    titre VARCHAR(150),
+    auteur VARCHAR(100),
+    isbn VARCHAR(50) UNIQUE,
+    quantite_totale INT,
+    quantite_disponible INT
+);
+
+CREATE TABLE IF NOT EXISTS emprunts (
+    id_emprunt INT AUTO_INCREMENT PRIMARY KEY,
+    id_utilisateur INT,
+    id_livre INT,
+    date_emprunt DATE,
+    date_retour_prevue DATE,
+    date_retour_effective DATE,
+    penalite INT DEFAULT 0,
+    penalite_payee BOOLEAN DEFAULT FALSE,
+    FOREIGN KEY (id_utilisateur) REFERENCES utilisateurs(id_utilisateur),
+    FOREIGN KEY (id_livre) REFERENCES livres(id_livre)
+);
+
+CREATE TABLE IF NOT EXISTS comptes (
+    id_compte INT AUTO_INCREMENT PRIMARY KEY,
+    login VARCHAR(50) UNIQUE,
+    mot_de_passe VARCHAR(100),
+    role VARCHAR(20)
+);
+
+-- Insertion compte admin par défaut (Login: admin / Pass: admin)
+INSERT IGNORE INTO comptes (login, mot_de_passe, role) VALUES ('admin', 'admin', 'ADMIN');
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+Script SQL pour générer des données réalistes
+📌 Utilisateurs
+INSERT INTO utilisateur (nom, prenom, matricule, type) VALUES
+('Diallo', 'Mamadou', 'E001', 'ETUDIANT'),
+('Sow', 'Awa', 'E002', 'ETUDIANT'),
+('Fall', 'Cheikh', 'ENS01', 'ENSEIGNANT');
+
+📌 Livres
+INSERT INTO livre (titre, auteur, isbn, quantite_totale, quantite_disponible) VALUES
+('Java POO', 'Bloch', 'ISBN001', 5, 3),
+('SQL Avancé', 'Date', 'ISBN002', 4, 2),
+('UML', 'Booch', 'ISBN003', 3, 0);
+
+🔥 Générer des emprunts EN COURS / RETARD / CLOTURÉS
+-- Emprunt en cours (pas en retard)
+INSERT INTO emprunt (id_utilisateur, id_livre, date_emprunt, date_retour_prevue)
+VALUES (1, 1, CURRENT_DATE - 5, CURRENT_DATE + 5);
+
+-- Emprunt en retard
+INSERT INTO emprunt (id_utilisateur, id_livre, date_emprunt, date_retour_prevue)
+VALUES (2, 2, CURRENT_DATE - 20, CURRENT_DATE - 5);
+
+-- Emprunt clôturé sans retard
+INSERT INTO emprunt (id_utilisateur, id_livre, date_emprunt, date_retour_prevue, date_retour_effective, penalite)
+VALUES (3, 1, CURRENT_DATE - 10, CURRENT_DATE - 2, CURRENT_DATE - 2, 0);
+
+-- Emprunt clôturé avec pénalité
+INSERT INTO emprunt (id_utilisateur, id_livre, date_emprunt, date_retour_prevue, date_retour_effective, penalite)
+VALUES (1, 2, CURRENT_DATE - 15, CURRENT_DATE - 10, CURRENT_DATE - 5, 5);
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+INSERT INTO utilisateur (nom, prenom, matricule, type) VALUES
+('Dupont','Jean','ETU001','ETUDIANT'),
+('Martin','Claire','ETU002','ETUDIANT'),
+('Bernard','Luc','ETU003','ETUDIANT'),
+('Petit','Sophie','ETU004','ETUDIANT'),
+('Durand','Paul','ETU005','ETUDIANT'),
+('Leroy','Nadia','ETU006','ETUDIANT'),
+('Moreau','Thomas','ETU007','ETUDIANT'),
+('Simon','Laura','ETU008','ETUDIANT'),
+('Laurent','Hugo','ETU009','ETUDIANT'),
+('Lefevre','Emma','ETU010','ETUDIANT'),
+
+('Roux','Marc','ENS001','ENSEIGNANT'),
+('Fournier','Isabelle','ENS002','ENSEIGNANT'),
+('Girard','Olivier','ENS003','ENSEIGNANT'),
+('Andre','Nathalie','ENS004','ENSEIGNANT'),
+('Mercier','Alain','ENS005','ENSEIGNANT'),
+('Blanc','Catherine','ENS006','ENSEIGNANT'),
+('Guerin','Patrick','ENS007','ENSEIGNANT'),
+('Boyer','Sylvie','ENS008','ENSEIGNANT'),
+('Gauthier','Eric','ENS009','ENSEIGNANT'),
+('Chevalier','Anne','ENS010','ENSEIGNANT');
+
+
+INSERT INTO livre (titre, auteur, isbn, quantite_totale, quantite_disponible) VALUES
+('L\'Étranger','Albert Camus','9782070360024',10,10),
+('Le Petit Prince','Antoine de Saint-Exupéry','9782070612758',15,15),
+('1984','George Orwell','9780451524935',8,8),
+('Le Rouge et le Noir','Stendhal','9782253004226',6,6),
+('Madame Bovary','Gustave Flaubert','9782070413119',7,7),
+('Les Misérables','Victor Hugo','9782253096344',12,12),
+('Germinal','Émile Zola','9782253004929',9,9),
+('L\'Assommoir','Émile Zola','9782253002918',5,5),
+('Candide','Voltaire','9782035831836',10,10),
+('La Peste','Albert Camus','9782070360420',6,6),
+
+('Clean Code','Robert C. Martin','9780132350884',8,8),
+('Effective Java','Joshua Bloch','9780134685991',5,5),
+('Design Patterns','GoF','9780201633610',4,4),
+('Java Concurrency','Brian Goetz','9780321349606',3,3),
+('Spring in Action','Craig Walls','9781617294945',6,6);
+
+
+-- EN COURS
+INSERT INTO emprunt (id_utilisateur, id_livre, date_emprunt, date_retour_prevue)
+VALUES
+(1,1,CURRENT_DATE - 3,CURRENT_DATE + 7),
+(2,2,CURRENT_DATE - 5,CURRENT_DATE + 5),
+(3,3,CURRENT_DATE - 2,CURRENT_DATE + 10),
+(4,4,CURRENT_DATE - 1,CURRENT_DATE + 14);
+
+-- RETARDS
+INSERT INTO emprunt (id_utilisateur, id_livre, date_emprunt, date_retour_prevue)
+VALUES
+(5,5,CURRENT_DATE - 20,CURRENT_DATE - 5),
+(6,6,CURRENT_DATE - 18,CURRENT_DATE - 3),
+(7,7,CURRENT_DATE - 25,CURRENT_DATE - 10);
+
+-- CLOTURÉS AVEC PÉNALITÉ
+INSERT INTO emprunt (
+ id_utilisateur,id_livre,date_emprunt,
+ date_retour_prevue,date_retour_effective,penalite
+)
+VALUES
+(8,8,CURRENT_DATE - 15,CURRENT_DATE - 10,CURRENT_DATE - 5,5),
+(9,9,CURRENT_DATE - 12,CURRENT_DATE - 7,CURRENT_DATE - 4,3);
+
+-- CLOTURÉS SANS PÉNALITÉ
+INSERT INTO emprunt (
+ id_utilisateur,id_livre,date_emprunt,
+ date_retour_prevue,date_retour_effective,penalite
+)
+VALUES
+(10,10,CURRENT_DATE - 10,CURRENT_DATE - 3,CURRENT_DATE - 3,0),
+(11,11,CURRENT_DATE - 7,CURRENT_DATE - 2,CURRENT_DATE - 2,0);
+
+
+
+
+
+
+
+
+
+
+
+
+
+

@@ -1,6 +1,11 @@
 package dao;
 
 import model.Emprunt;
+import model.Livre;
+import model.TopUtilisateur;
+import model.utilisateur.Enseignant;
+import model.utilisateur.Etudiant;
+import model.utilisateur.Utilisateur;
 
 import java.sql.*;
 import java.time.LocalDate;
@@ -8,215 +13,167 @@ import java.util.ArrayList;
 
 public class EmpruntDAO {
 
-    // ========================================
-    // Champ pour accéder aux livres
-    // ========================================
-    private LivreDAO livreDAO;
-
-    // ========================================
-    // Constructeur
-    // ========================================
-    public EmpruntDAO() {
-        this.livreDAO = new LivreDAO();
-    }
-
-    // ========================================
-    // 1. AJOUT D’UN EMPRUNT (OBJET)
-    // ========================================
-    public void ajouterEmprunt(Emprunt emprunt) {
-
-        String sql = """
-            INSERT INTO emprunts(id_utilisateur, id_livre, date_emprunt, date_retour_prevue)
-            VALUES (?, ?, ?, ?)
-        """;
-
-        try (Connection connexion = ConnexionBD.getConnexion();
-             PreparedStatement ps = connexion.prepareStatement(sql)) {
-
-            ps.setInt(1, emprunt.getUtilisateur().getIdUtilisateur());
-            ps.setInt(2, emprunt.getLivre().getIdLivre());
-            ps.setDate(3, Date.valueOf(emprunt.getDateEmprunt()));
-            ps.setDate(4, Date.valueOf(emprunt.getDateRetourPrevue()));
-
-            ps.executeUpdate();
-
-        } catch (SQLException e) {
-            e.printStackTrace();
+    // Méthode utilitaire pour mapper le ResultSet complet avec les JOINs
+    // Cela évite les NullPointerExceptions dans l'interface
+    private Emprunt mapRow(ResultSet rs) throws SQLException {
+        // Reconstruction Utilisateur
+        Utilisateur u;
+        if ("ETUDIANT".equals(rs.getString("type_utilisateur"))) {
+            u = new Etudiant(rs.getInt("id_utilisateur"), rs.getString("nom_u"), rs.getString("prenom_u"), rs.getString("matricule"));
+        } else {
+            u = new Enseignant(rs.getInt("id_utilisateur"), rs.getString("nom_u"), rs.getString("prenom_u"), rs.getString("matricule"));
         }
+
+        // Reconstruction Livre
+        Livre l = new Livre(rs.getInt("id_livre"), rs.getString("titre"), rs.getString("auteur"), rs.getString("isbn"), 0, 0);
+
+        return new Emprunt(
+                rs.getInt("id_emprunt"),
+                u,
+                l,
+                rs.getDate("date_emprunt").toLocalDate(),
+                rs.getDate("date_retour_prevue").toLocalDate(),
+                rs.getDate("date_retour_effective") != null ? rs.getDate("date_retour_effective").toLocalDate() : null,
+                rs.getInt("penalite"),
+                rs.getBoolean("penalite_payee")
+        );
     }
 
-    // ========================================
-    // 2. AJOUT D’UN EMPRUNT (PAR IDENTIFIANTS)
-    // ========================================
-    public void ajouterEmprunt(int idUtilisateur,
-                               int idLivre,
-                               LocalDate dateEmprunt,
-                               LocalDate dateRetourPrevue) {
+    // Requete de base avec JOIN pour tout récupérer
+    private static final String SQL_SELECT_FULL = """
+        SELECT e.*, 
+               u.nom as nom_u, u.prenom as prenom_u, u.matricule, u.type_utilisateur,
+               l.titre, l.auteur, l.isbn
+        FROM emprunts e
+        JOIN utilisateurs u ON e.id_utilisateur = u.id_utilisateur
+        JOIN livres l ON e.id_livre = l.id_livre
+    """;
 
-        String sql = """
-            INSERT INTO emprunts(id_utilisateur, id_livre, date_emprunt, date_retour_prevue)
-            VALUES (?, ?, ?, ?)
-        """;
-
-        try (Connection connexion = ConnexionBD.getConnexion();
-             PreparedStatement ps = connexion.prepareStatement(sql)) {
-
+    public void ajouterEmprunt(int idUtilisateur, int idLivre, LocalDate dateEmprunt, LocalDate dateRetourPrevue) {
+        String sql = "INSERT INTO emprunts(id_utilisateur, id_livre, date_emprunt, date_retour_prevue) VALUES (?, ?, ?, ?)";
+        try (Connection c = ConnexionBD.getConnexion(); PreparedStatement ps = c.prepareStatement(sql)) {
             ps.setInt(1, idUtilisateur);
             ps.setInt(2, idLivre);
             ps.setDate(3, Date.valueOf(dateEmprunt));
             ps.setDate(4, Date.valueOf(dateRetourPrevue));
-
             ps.executeUpdate();
+        } catch (SQLException e) { e.printStackTrace(); }
+    }
 
-        } catch (SQLException e) {
-            e.printStackTrace();
+    public void ajouterEmprunt(Connection c, int idUtilisateur, int idLivre, LocalDate dateEmprunt, LocalDate dateRetourPrevue) throws SQLException {
+        String sql = "INSERT INTO emprunts(id_utilisateur, id_livre, date_emprunt, date_retour_prevue) VALUES (?, ?, ?, ?)";
+        try (PreparedStatement ps = c.prepareStatement(sql)) {
+            ps.setInt(1, idUtilisateur);
+            ps.setInt(2, idLivre);
+            ps.setDate(3, Date.valueOf(dateEmprunt));
+            ps.setDate(4, Date.valueOf(dateRetourPrevue));
+            ps.executeUpdate();
         }
     }
 
-    // ========================================
-    // 3. COMPTER LES EMPRUNTS ACTIFS
-    // ========================================
     public int compterEmpruntsActifs(int idUtilisateur) {
-
-        String sql = """
-            SELECT COUNT(*)
-            FROM emprunts
-            WHERE id_utilisateur = ?
-            AND date_retour_effective IS NULL
-        """;
-
-        try (Connection connexion = ConnexionBD.getConnexion();
-             PreparedStatement ps = connexion.prepareStatement(sql)) {
-
+        String sql = "SELECT COUNT(*) FROM emprunts WHERE id_utilisateur = ? AND date_retour_effective IS NULL";
+        try (Connection c = ConnexionBD.getConnexion(); PreparedStatement ps = c.prepareStatement(sql)) {
             ps.setInt(1, idUtilisateur);
             ResultSet rs = ps.executeQuery();
-
-            if (rs.next()) {
-                return rs.getInt(1);
-            }
-
-        } catch (SQLException e) {
-            e.printStackTrace();
-        }
-
-        return 0;
+            return rs.next() ? rs.getInt(1) : 0;
+        } catch (SQLException e) { return 0; }
     }
 
-    // ========================================
-    // 4. ENREGISTRER LE RETOUR D’UN EMPRUNT
-    // ========================================
-    public void enregistrerRetour(int idEmprunt,
-                                  LocalDate dateRetourEffective,
-                                  int penalite) {
-
-        String sql = """
-            UPDATE emprunts
-            SET date_retour_effective = ?, penalite = ?
-            WHERE id_emprunt = ?
-        """;
-
-        try (Connection connexion = ConnexionBD.getConnexion();
-             PreparedStatement ps = connexion.prepareStatement(sql)) {
-
-            ps.setDate(1, Date.valueOf(dateRetourEffective));
-            ps.setInt(2, penalite);
-            ps.setInt(3, idEmprunt);
-
-            ps.executeUpdate();
-
-        } catch (SQLException e) {
-            e.printStackTrace();
-        }
-    }
-
-    // ========================================
-    // 5. LISTE DE TOUS LES EMPRUNTS
-    // ========================================
-    public ArrayList<Emprunt> getTousLesEmprunts() {
-
+    public ArrayList<Emprunt> getHistorique() {
         ArrayList<Emprunt> liste = new ArrayList<>();
-        String sql = "SELECT * FROM emprunts";
-
-        try (Connection connexion = ConnexionBD.getConnexion();
-             Statement st = connexion.createStatement();
-             ResultSet rs = st.executeQuery(sql)) {
-
-            while (rs.next()) {
-
-                Emprunt emprunt = new Emprunt(
-                        rs.getInt("id_emprunt"),
-                        null,   // utilisateur reconstruit dans le service
-                        null,   // livre reconstruit dans le service
-                        rs.getDate("date_emprunt").toLocalDate(),
-                        rs.getDate("date_retour_prevue").toLocalDate()
-                );
-
-                liste.add(emprunt);
-            }
-
-        } catch (SQLException e) {
-            e.printStackTrace();
-        }
-
+        String sql = SQL_SELECT_FULL + " ORDER BY date_emprunt DESC";
+        try (Connection c = ConnexionBD.getConnexion(); Statement st = c.createStatement(); ResultSet rs = st.executeQuery(sql)) {
+            while (rs.next()) liste.add(mapRow(rs));
+        } catch (Exception e) { e.printStackTrace(); }
         return liste;
     }
 
-    // ========================================
-    // 6. RECUPERER UN EMPRUNT PAR ID
-    // ========================================
-    public Emprunt getEmpruntParId(int idEmprunt) {
+    public ArrayList<Emprunt> getEmpruntsEnCours() {
+        ArrayList<Emprunt> liste = new ArrayList<>();
+        String sql = SQL_SELECT_FULL + " WHERE date_retour_effective IS NULL ORDER BY date_emprunt DESC";
+        try (Connection c = ConnexionBD.getConnexion(); Statement st = c.createStatement(); ResultSet rs = st.executeQuery(sql)) {
+            while (rs.next()) liste.add(mapRow(rs));
+        } catch (Exception e) { e.printStackTrace(); }
+        return liste;
+    }
 
-        String sql = "SELECT * FROM emprunts WHERE id_emprunt = ?";
+    public ArrayList<Emprunt> getEmpruntsEnRetard() {
+        ArrayList<Emprunt> liste = new ArrayList<>();
+        String sql = SQL_SELECT_FULL + " WHERE date_retour_effective IS NULL AND date_retour_prevue < CURRENT_DATE";
+        try (Connection c = ConnexionBD.getConnexion(); Statement st = c.createStatement(); ResultSet rs = st.executeQuery(sql)) {
+            while (rs.next()) liste.add(mapRow(rs));
+        } catch (Exception e) { e.printStackTrace(); }
+        return liste;
+    }
 
-        try (Connection c = ConnexionBD.getConnexion();
-             PreparedStatement ps = c.prepareStatement(sql)) {
-
-            ps.setInt(1, idEmprunt);
+    public Emprunt getEmpruntParId(int id) {
+        String sql = SQL_SELECT_FULL + " WHERE id_emprunt = ?";
+        try (Connection c = ConnexionBD.getConnexion(); PreparedStatement ps = c.prepareStatement(sql)) {
+            ps.setInt(1, id);
             ResultSet rs = ps.executeQuery();
-
-            if (rs.next()) {
-                return new Emprunt(
-                        rs.getInt("id_emprunt"),
-                        null,
-                        livreDAO.getLivreParId(rs.getInt("id_livre")), // ✅ corrigé
-                        rs.getDate("date_emprunt").toLocalDate(),
-                        rs.getDate("date_retour_prevue").toLocalDate()
-                );
-            }
-
-        } catch (Exception e) {
-            e.printStackTrace();
-        }
-
+            if (rs.next()) return mapRow(rs);
+        } catch (Exception e) { e.printStackTrace(); }
         return null;
     }
 
-    // ========================================
-// CLÔTURER UN EMPRUNT (RETOUR)
-// ========================================
-    public void cloturerEmprunt(int idEmprunt,
-                                LocalDate dateRetourEffective,
-                                int penalite) {
-
-        String sql = """
-        UPDATE emprunts
-        SET date_retour_effective = ?, penalite = ?
-        WHERE id_emprunt = ?
-    """;
-
-        try (Connection connexion = ConnexionBD.getConnexion();
-             PreparedStatement ps = connexion.prepareStatement(sql)) {
-
-            ps.setDate(1, Date.valueOf(dateRetourEffective));
+    public void cloturerEmprunt(Connection c, int idEmprunt, LocalDate dateRetour, int penalite) throws SQLException {
+        String sql = "UPDATE emprunts SET date_retour_effective = ?, penalite = ? WHERE id_emprunt = ?";
+        try (PreparedStatement ps = c.prepareStatement(sql)) {
+            ps.setDate(1, Date.valueOf(dateRetour));
             ps.setInt(2, penalite);
             ps.setInt(3, idEmprunt);
-
             ps.executeUpdate();
-            System.out.println("✔ Emprunt clôturé");
-
-        } catch (SQLException e) {
-            e.printStackTrace();
         }
     }
 
+    public boolean payerPenalite(int idEmprunt) {
+        String sql = "UPDATE emprunts SET penalite_payee = TRUE WHERE id_emprunt = ? AND penalite > 0";
+        try (Connection c = ConnexionBD.getConnexion(); PreparedStatement ps = c.prepareStatement(sql)) {
+            ps.setInt(1, idEmprunt);
+            return ps.executeUpdate() > 0;
+        } catch (Exception e) { return false; }
+    }
+
+    public boolean utilisateurAPenaliteNonPayee(int idUtilisateur) {
+        String sql = "SELECT COUNT(*) FROM emprunts WHERE id_utilisateur = ? AND penalite > 0 AND penalite_payee = FALSE";
+        try (Connection c = ConnexionBD.getConnexion(); PreparedStatement ps = c.prepareStatement(sql)) {
+            ps.setInt(1, idUtilisateur);
+            ResultSet rs = ps.executeQuery();
+            return rs.next() && rs.getInt(1) > 0;
+        } catch (Exception e) { return false; }
+    }
+
+    public ArrayList<TopUtilisateur> getUtilisateursLesPlusActifs() {
+        ArrayList<TopUtilisateur> liste = new ArrayList<>();
+        String sql = """
+            SELECT u.nom, u.prenom, COUNT(e.id_emprunt) as total
+            FROM emprunts e
+            JOIN utilisateurs u ON e.id_utilisateur = u.id_utilisateur
+            GROUP BY u.id_utilisateur
+            ORDER BY total DESC
+            LIMIT 10
+        """;
+        try (Connection c = ConnexionBD.getConnexion(); Statement st = c.createStatement(); ResultSet rs = st.executeQuery(sql)) {
+            while (rs.next()) {
+                liste.add(new TopUtilisateur(
+                        rs.getString("nom"),
+                        rs.getString("prenom"),
+                        rs.getInt("total")
+                ));
+            }
+        } catch (Exception e) { e.printStackTrace(); }
+        return liste;
+    }
+
+    // Stats simples
+    public int countEmpruntsActifs() { return count("SELECT COUNT(*) FROM emprunts WHERE date_retour_effective IS NULL"); }
+    public int countRetards() { return count("SELECT COUNT(*) FROM emprunts WHERE date_retour_effective IS NULL AND date_retour_prevue < CURRENT_DATE"); }
+    public int sumPenalites() { return count("SELECT COALESCE(SUM(penalite),0) FROM emprunts"); }
+
+    private int count(String sql) {
+        try (Connection c = ConnexionBD.getConnexion(); Statement st = c.createStatement(); ResultSet rs = st.executeQuery(sql)) {
+            return rs.next() ? rs.getInt(1) : 0;
+        } catch (Exception e) { return 0; }
+    }
 }

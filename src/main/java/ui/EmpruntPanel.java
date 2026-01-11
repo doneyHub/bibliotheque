@@ -1,85 +1,95 @@
 package ui;
 
 import javafx.geometry.Insets;
+import javafx.geometry.Pos;
 import javafx.scene.control.*;
-import javafx.scene.layout.GridPane;
+import javafx.scene.layout.BorderPane;
+import javafx.scene.layout.VBox;
+import javafx.scene.paint.Color;
 import service.EmpruntService;
+import service.ResultatEmprunt;
 
-import java.sql.SQLException;
+public class EmpruntPanel extends BorderPane {
 
-public class EmpruntPanel extends GridPane {
-
-    private final EmpruntService empruntService = new EmpruntService();
+    private final EmpruntService service = new EmpruntService();
 
     public EmpruntPanel() {
-
         setPadding(new Insets(30));
-        setHgap(20);
-        setVgap(20);
-        setStyle("-fx-background-color: #ffffff;");
 
-        Label titre = new Label("📖 Gestion des emprunts");
+        // TITRE
+        Label titre = new Label("📖 Nouvel emprunt");
         titre.setStyle("-fx-font-size: 22px; -fx-font-weight: bold;");
 
-        Label lblUtilisateur = new Label("ID Utilisateur :");
-        TextField txtUtilisateur = new TextField();
-        txtUtilisateur.setPromptText("ex: 1");
+        // CARTE FORMULAIRE
+        VBox card = new VBox(15);
+        card.setPadding(new Insets(25));
+        card.setMaxWidth(420);
+        card.setStyle("-fx-background-color: white; -fx-background-radius: 12; -fx-border-radius: 12; -fx-border-color: #dddddd;");
 
-        Label lblLivre = new Label("ID Livre :");
+        TextField txtUser = new TextField();
+        txtUser.setPromptText("ID Utilisateur");
+        txtUser.setTooltip(new Tooltip("Identifiant visible dans la liste utilisateurs"));
+
         TextField txtLivre = new TextField();
-        txtLivre.setPromptText("ex: 10");
+        txtLivre.setPromptText("ID Livre");
+        txtLivre.setTooltip(new Tooltip("Identifiant visible dans la liste livres"));
 
-        Button btnEmprunter = new Button("📚 Emprunter");
-        btnEmprunter.setStyle("""
-            -fx-background-color: #2ecc71;
-            -fx-text-fill: white;
-            -fx-font-size: 14px;
-            -fx-padding: 8 20;
-        """);
+        Button btn = new Button("📚 Valider l’emprunt");
+        btn.setMaxWidth(Double.MAX_VALUE);
+        btn.setStyle("-fx-background-color: #2ecc71; -fx-text-fill: white; -fx-font-weight: bold; -fx-background-radius: 8; -fx-padding: 10;");
 
-        Label message = new Label();
+        Label badge = new Label();
+        badge.setVisible(false);
 
-        btnEmprunter.setOnAction(e -> {
-
-            message.setText("");
-
-            if (txtUtilisateur.getText().isEmpty() || txtLivre.getText().isEmpty()) {
-                message.setText("❌ Tous les champs sont obligatoires");
-                message.setStyle("-fx-text-fill: red;");
-                return;
-            }
-
+        // ACTION
+        btn.setOnAction(e -> {
+            badge.setVisible(true);
             try {
-                int idUtilisateur = Integer.parseInt(txtUtilisateur.getText());
-                int idLivre = Integer.parseInt(txtLivre.getText());
+                int idUtilisateur = Integer.parseInt(txtUser.getText().trim());
+                int idLivre = Integer.parseInt(txtLivre.getText().trim());
 
-                boolean ok = empruntService.emprunterLivre(idUtilisateur, idLivre);
+                ResultatEmprunt resultat = service.emprunterLivre(idUtilisateur, idLivre);
 
-                if (ok) {
-                    message.setText("✔ Emprunt effectué avec succès");
-                    message.setStyle("-fx-text-fill: green;");
-                } else {
-                    message.setText("❌ Emprunt refusé (limite atteinte ou livre indisponible)");
-                    message.setStyle("-fx-text-fill: red;");
+                switch (resultat) {
+                    case SUCCES:
+                        styleBadge(badge, "✔ Emprunt validé", "#27ae60");
+                        break;
+                    case UTILISATEUR_INEXISTANT:
+                        styleBadge(badge, "❌ Utilisateur inexistant", "#c0392b");
+                        break;
+                    case LIVRE_INEXISTANT:
+                        styleBadge(badge, "❌ Livre inexistant", "#c0392b");
+                        break;
+                    case LIVRE_INDISPONIBLE:
+                        styleBadge(badge, "❌ Livre indisponible (Stock 0)", "#e74c3c");
+                        break;
+                    case LIMITE_ETUDIANT_ATTEINTE:
+                        styleBadge(badge, "❌ Limite étudiant atteinte (3)", "#f39c12");
+                        break;
+                    case LIMITE_ENSEIGNANT_ATTEINTE:
+                        styleBadge(badge, "❌ Limite enseignant atteinte (5)", "#f39c12");
+                        break;
+                    case PENALITE_NON_REGLEE:
+                        styleBadge(badge, "⚠ Pénalité non réglée", "#e67e22");
+                        break;
+                    default:
+                        styleBadge(badge, "❌ Erreur inconnue", "#c0392b");
                 }
-
             } catch (NumberFormatException ex) {
-                message.setText("❌ Les IDs doivent être des nombres");
-                message.setStyle("-fx-text-fill: red;");
-
-            } catch (SQLException ex) {
-                message.setText("❌ Erreur base de données");
-                message.setStyle("-fx-text-fill: red;");
-                ex.printStackTrace();
+                styleBadge(badge, "❌ ID invalide (entrez un nombre)", "#c0392b");
             }
         });
 
-        add(titre, 0, 0, 2, 1);
-        add(lblUtilisateur, 0, 1);
-        add(txtUtilisateur, 1, 1);
-        add(lblLivre, 0, 2);
-        add(txtLivre, 1, 2);
-        add(btnEmprunter, 1, 3);
-        add(message, 1, 4);
+        card.getChildren().addAll(txtUser, txtLivre, btn, badge);
+
+        VBox container = new VBox(20, titre, card);
+        container.setAlignment(Pos.TOP_CENTER);
+        setCenter(container);
+    }
+
+    private void styleBadge(Label label, String texte, String couleur) {
+        label.setText(texte);
+        label.setTextFill(Color.WHITE);
+        label.setStyle("-fx-background-radius: 15; -fx-font-weight: bold; -fx-padding: 6 12 6 12; -fx-background-color: " + couleur + ";");
     }
 }

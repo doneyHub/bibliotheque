@@ -1,10 +1,7 @@
 package dao;
-
 import model.Livre;
-
 import java.sql.*;
 import java.util.ArrayList;
-
 public class LivreDAO {
 
     // ========================================
@@ -13,9 +10,9 @@ public class LivreDAO {
     public void ajouterLivre(Livre livre) {
 
         String sql = """
-        INSERT INTO livres(titre, auteur, isbn, quantite_totale, quantite_disponible)
-        VALUES (?, ?, ?, ?, ?)
-    """;
+    INSERT INTO livres(titre, auteur, isbn, quantite_totale, quantite_disponible)
+    VALUES (?, ?, ?, ?, ?)
+""";
 
         Connection connexion = ConnexionBD.getConnexion();
         if (connexion == null) {
@@ -106,11 +103,11 @@ public class LivreDAO {
     public boolean decrementerStock(int idLivre) {
 
         String sql = """
-            UPDATE livres
-            SET quantite_disponible = quantite_disponible - 1
-            WHERE id_livre = ?
-            AND quantite_disponible > 0
-        """;
+        UPDATE livres
+        SET quantite_disponible = quantite_disponible - 1
+        WHERE id_livre = ?
+        AND quantite_disponible > 0
+    """;
 
         try (Connection connexion = ConnexionBD.getConnexion();
              PreparedStatement ps = connexion.prepareStatement(sql)) {
@@ -131,10 +128,10 @@ public class LivreDAO {
     public boolean incrementerStock(int idLivre) {
 
         String sql = """
-            UPDATE livres
-            SET quantite_disponible = quantite_disponible + 1
-            WHERE id_livre = ?
-        """;
+        UPDATE livres
+        SET quantite_disponible = quantite_disponible + 1
+        WHERE id_livre = ?
+    """;
 
         try (Connection c = ConnexionBD.getConnexion();
              PreparedStatement ps = c.prepareStatement(sql)) {
@@ -146,6 +143,115 @@ public class LivreDAO {
         } catch (Exception e) {
             e.printStackTrace();
             return false;
+        }
+    }
+
+    public boolean decrementerStock(Connection c, int idLivre) throws SQLException {
+
+        String sql = """
+    UPDATE livres
+    SET quantite_disponible = quantite_disponible - 1
+    WHERE id_livre = ?
+    AND quantite_disponible > 0
+""";
+
+        try (PreparedStatement ps = c.prepareStatement(sql)) {
+            ps.setInt(1, idLivre);
+            return ps.executeUpdate() == 1;
+        }
+    }
+
+    public void incrementerStock(Connection c, int idLivre) throws SQLException {
+
+        String sql = """
+    UPDATE livres
+    SET quantite_disponible = quantite_disponible + 1
+    WHERE id_livre = ?
+""";
+
+        try (PreparedStatement ps = c.prepareStatement(sql)) {
+            ps.setInt(1, idLivre);
+            ps.executeUpdate();
+        }
+    }
+
+    public ArrayList<Livre> rechercher(String motCle) {
+
+        ArrayList<Livre> liste = new ArrayList<>();
+
+        String sql = """
+    SELECT * FROM livres
+    WHERE titre LIKE ?
+       OR auteur LIKE ?
+       OR isbn LIKE ?
+""";
+
+        try (Connection c = ConnexionBD.getConnexion();
+             PreparedStatement ps = c.prepareStatement(sql)) {
+
+            String mc = "%" + motCle + "%";
+            ps.setString(1, mc);
+            ps.setString(2, mc);
+            ps.setString(3, mc);
+
+            ResultSet rs = ps.executeQuery();
+
+            while (rs.next()) {
+                liste.add(new Livre(
+                        rs.getInt("id_livre"),
+                        rs.getString("titre"),
+                        rs.getString("auteur"),
+                        rs.getString("isbn"),
+                        rs.getInt("quantite_totale"),
+                        rs.getInt("quantite_disponible")
+                ));
+            }
+
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+
+        return liste;
+    }
+
+    public void modifierLivre(Livre l) {
+
+        String sql = """
+    UPDATE livres
+    SET titre = ?, auteur = ?, isbn = ?,
+        quantite_totale = ?, quantite_disponible = ?
+    WHERE id_livre = ?
+""";
+
+        try (Connection c = ConnexionBD.getConnexion();
+             PreparedStatement ps = c.prepareStatement(sql)) {
+
+            ps.setString(1, l.getTitre());
+            ps.setString(2, l.getAuteur());
+            ps.setString(3, l.getIsbn());
+            ps.setInt(4, l.getQuantiteTotale());
+            ps.setInt(5, l.getQuantiteDisponible());
+            ps.setInt(6, l.getIdLivre());
+
+            ps.executeUpdate();
+
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
+
+    public void supprimerLivre(int idLivre) {
+
+        String sql = "DELETE FROM livres WHERE id_livre = ?";
+
+        try (Connection c = ConnexionBD.getConnexion();
+             PreparedStatement ps = c.prepareStatement(sql)) {
+
+            ps.setInt(1, idLivre);
+            ps.executeUpdate();
+
+        } catch (Exception e) {
+            e.printStackTrace();
         }
     }
 }

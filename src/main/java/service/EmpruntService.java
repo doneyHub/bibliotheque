@@ -1,78 +1,62 @@
 package service;
-
-import dao.EmpruntDAO;
-import dao.LivreDAO;
-import dao.UtilisateurDAO;
-import model.Livre;
-import model.utilisateur.Utilisateur;
-
-import java.sql.SQLException;
+import dao.*;
+import model.*;
+import model.utilisateur.*;
+import java.sql.Connection;
 import java.time.LocalDate;
 import java.time.temporal.ChronoUnit;
+import java.util.ArrayList;
+import java.util.List;
 
 public class EmpruntService {
-
     private final EmpruntDAO empruntDAO = new EmpruntDAO();
     private final UtilisateurDAO utilisateurDAO = new UtilisateurDAO();
     private final LivreDAO livreDAO = new LivreDAO();
 
-    public boolean emprunterLivre(int idUtilisateur, int idLivre) throws SQLException {
+    public ResultatEmprunt emprunterLivre(int idUtilisateur, int idLivre) {
+        Utilisateur u = utilisateurDAO.getUtilisateurParId(idUtilisateur);
+        if (u == null) return ResultatEmprunt.UTILISATEUR_INEXISTANT;
+        Livre l = livreDAO.getLivreParId(idLivre);
+        if (l == null) return ResultatEmprunt.LIVRE_INEXISTANT;
+        if (empruntDAO.utilisateurAPenaliteNonPayee(idUtilisateur)) return ResultatEmprunt.PENALITE_NON_REGLEE;
+        if (l.getQuantiteDisponible() <= 0) return ResultatEmprunt.LIVRE_INDISPONIBLE;
 
-        Utilisateur utilisateur = utilisateurDAO.getUtilisateurParId(idUtilisateur);
-        Livre livre = livreDAO.getLivreParId(idLivre);
+        int nb = empruntDAO.compterEmpruntsActifs(idUtilisateur);
+        if (u instanceof Etudiant && nb >= 3) return ResultatEmprunt.LIMITE_ETUDIANT_ATTEINTE;
+        if (u instanceof Enseignant && nb >= 5) return ResultatEmprunt.LIMITE_ENSEIGNANT_ATTEINTE;
 
-        if (utilisateur == null || livre == null) return false;
-        if (livre.getQuantiteDisponible() <= 0) return false;
-
-        int empruntsActifs = empruntDAO.compterEmpruntsActifs(idUtilisateur);
-        if (empruntsActifs >= utilisateur.getNombreMaxEmprunts()) return false;
-
-        LocalDate aujourdHui = LocalDate.now();
-        empruntDAO.ajouterEmprunt(idUtilisateur, idLivre,
-                aujourdHui, aujourdHui.plusDays(14));
-
+        empruntDAO.ajouterEmprunt(idUtilisateur, idLivre, LocalDate.now(), LocalDate.now().plusDays(14));
         livreDAO.decrementerStock(idLivre);
-        return true;
+        return ResultatEmprunt.SUCCES;
     }
 
-    public int calculerPenalite(LocalDate dateRetourPrevue,
-                                LocalDate dateRetourEffective) {
+    public int retournerLivre(int idEmprunt) {
+        Connection c = null;
+        try {
+            c = ConnexionBD.getConnexion();
+            c.setAutoCommit(false);
+            Emprunt e = empruntDAO.getEmpruntParId(idEmprunt);
+            if (e == null || e.getDateRetourEffective() != null) return -1;
 
-        if (dateRetourEffective.isAfter(dateRetourPrevue)) {
-            return (int) ChronoUnit.DAYS.between(
-                    dateRetourPrevue,
-                    dateRetourEffective
-            );
+            LocalDate retour = LocalDate.now();
+            int penalite = 0;
+            if (retour.isAfter(e.getDateRetourPrevue())) {
+                penalite = (int) ChronoUnit.DAYS.between(e.getDateRetourPrevue(), retour);
+            }
+            empruntDAO.cloturerEmprunt(c, idEmprunt, retour, penalite);
+            livreDAO.incrementerStock(c, e.getLivre().getIdLivre());
+            c.commit();
+            return penalite;
+        } catch (Exception e) {
+            try{if(c!=null)c.rollback();}catch(Exception ex){}
+            return -1;
         }
-        return 0;
     }
 
-    public void retournerLivre(int idEmprunt) {
-
-        var emprunt = empruntDAO.getEmpruntParId(idEmprunt);
-
-        if (emprunt == null) {
-            throw new IllegalArgumentException("Emprunt introuvable");
-        }
-
-        LocalDate dateRetour = LocalDate.now();
-
-        int penalite = calculerPenalite(
-                emprunt.getDateRetourPrevue(),
-                dateRetour
-        );
-
-        empruntDAO.cloturerEmprunt(
-                idEmprunt,
-                dateRetour,
-                penalite
-        );
-
-        // remettre le livre en stock
-        livreDAO.incrementerStock(
-                emprunt.getLivre().getIdLivre()
-        );
-    }
-
-
+    public boolean payerPenalite(int id) { return empruntDAO.payerPenalite(id); }
+    public List<Emprunt> getHistorique() { return empruntDAO.getHistorique(); }
+    public ArrayList<Emprunt> getEmpruntsEnCours() { return empruntDAO.getEmpruntsEnCours(); }
+    public ArrayList<Emprunt> getEmpruntsEnRetard() { return empruntDAO.getEmpruntsEnRetard(); }
+    public ArrayList<TopUtilisateur> getUtilisateursLesPlusActifs() { return empruntDAO.getUtilisateursLesPlusActifs(); }
+    public int getNbEmpruntsActifs() { return empruntDAO.compterEmpruntsActifs(0); } // 0 = tous (si modif DAO) ou utiliser size()
 }
